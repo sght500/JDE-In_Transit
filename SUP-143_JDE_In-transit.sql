@@ -14,17 +14,24 @@
 -- 01/26/2024  | 1.0 |Mario Montoya        |Initial development. Translation from Oracle query. Date fixed.
 -- 01/31/2024  | 1.1 |Mario Montoya        |Created the view in "gcp-vc-planning.scdw_curated_reports" as requested by Tumul.
 -- 02/23/2024  | 1.2 |Mario Montoya        |Productionizing. Using amw-dna-ingestion-prd.jde.f4211 and amw-dna-coe-curated.
+-- 03/07/2024  | 1.3 |Mario Montoya        |Getting base_item from amw-dna-ingestion-prd.jde.f4101
+-- 03/08/2024  | 1.4 |Mario Montoya        |Getting item_root from gcp-vc-planning-prod.pricing.pricing_split_item_numbers
+-- 03/08/2024  | 1.5 |Mario Montoya        |Applying Regular Expression sustitution in Item and Item Description.
 -- ============================================================================================================================
 -- Input Tables
 --      amw-dna-ingestion-prd.jde.f4211   - Sales Order Detail File
 --      amw-dna-ingestion-prd.jde.f0006   - Business Unit Master
+--      amw-dna-ingestion-prd.jde.f4101   - Item Master
+--      gcp-vc-planning-prod.pricing.pricing_split_item_numbers   - Item Construct (Root, Base, Revision) - Nick Seguin
 -- Output View
 --      amw-dna-coe-curated.jde.jde_intransit
 -- ============================================================================================================================
 CREATE OR REPLACE VIEW amw-dna-coe-curated.jde.jde_intransit AS
 SELECT
-  TRIM(a.SDLITM) AS itm,
-  TRIM(a.SDDSC1) AS itm_desc,
+  TRIM(f.root_item) AS item_root,
+  d.IMSRTX AS base_item,  
+  REGEXP_REPLACE(TRIM(a.SDLITM), "(.*)( )([A-Z])$", '\\1\\3') itm,
+  REGEXP_REPLACE(TRIM(a.SDDSC1), " +", " ") itm_desc,
   a.SDDOCO AS sls_ordno,
   TRIM(a.SDDCTO) AS sls_ordtype,
   CAST(a.SDSOQS AS INT64)/100 AS shipped_qty,
@@ -58,6 +65,12 @@ JOIN
 JOIN
   amw-dna-ingestion-prd.jde.f0006 c
     ON CAST(a.SDAN8 AS STRING)=TRIM(c.mcmcu)
+JOIN
+  amw-dna-ingestion-prd.jde.f4101 d
+    ON a.SDLITM = d.IMLITM
+JOIN
+  gcp-vc-planning-prod.pricing.pricing_split_item_numbers f
+    ON TRIM(a.SDLITM) = f.item
 WHERE
   1=1
   AND a.SDMOT IS NOT NULL
